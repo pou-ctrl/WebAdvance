@@ -55,7 +55,7 @@ data class WebApp(
     val lastUpdated: Date? = null,
     val notificationCount: Int = 0,
     val thumbnail: Bitmap? = null,
-    val scrollPosition: Int = 0,
+    val lastUrl: String? = null,
     val sessionData: String? = null, // JSON for cookies, localStorage
     val lastUsed: Date? = null,
     val usageCount: Int = 0,

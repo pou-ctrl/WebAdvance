@@ -45,6 +45,7 @@ class UniversalFileViewerActivity : AppCompatActivity() {
     private lateinit var fileSizeText: TextView
     private lateinit var fileActionBar: LinearLayout
     private lateinit var shareButton: Button
+    private lateinit var copyPathButton: Button
     private lateinit var fullscreenButton: Button
     private lateinit var openOtherButton: Button
     private lateinit var openExternalButton: Button
@@ -70,11 +71,13 @@ class UniversalFileViewerActivity : AppCompatActivity() {
         fileSizeText = findViewById(R.id.file_size_text)
         fileActionBar = findViewById(R.id.file_action_bar)
         shareButton = findViewById(R.id.button_share_file)
+        copyPathButton = findViewById(R.id.button_copy_path)
         fullscreenButton = findViewById(R.id.button_fullscreen)
         openOtherButton = findViewById(R.id.button_open_other_app)
         openExternalButton = findViewById(R.id.button_open_external)
 
         shareButton.setOnClickListener { hapticTap(); shareCurrentFile() }
+        copyPathButton.setOnClickListener { hapticTap(); copyFilePathToClipboard() }
         fullscreenButton.setOnClickListener { hapticTap(); toggleFullscreen() }
         openOtherButton.setOnClickListener { hapticTap(); openExternalCurrentFile() }
         openExternalButton.setOnClickListener { hapticTap(); openExternalCurrentFile() }
@@ -340,6 +343,14 @@ class UniversalFileViewerActivity : AppCompatActivity() {
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(intent, "Share ${file.name}"))
+    }
+
+    private fun copyFilePathToClipboard() {
+        val file = currentFile ?: return
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        val clip = android.content.ClipData.newPlainText("File path", file.absolutePath)
+        clipboard?.setPrimaryClip(clip)
+        Toast.makeText(this, "File path copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 
     private fun toggleFullscreen() {

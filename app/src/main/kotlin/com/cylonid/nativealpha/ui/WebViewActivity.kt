@@ -143,6 +143,7 @@ import com.cylonid.nativealpha.viewmodel.WebViewViewModel
 import com.cylonid.nativealpha.ui.DownloadHistoryActivity
 import com.cylonid.nativealpha.waos.util.WaosConstants
 import com.cylonid.nativealpha.webview.SessionManager
+import com.cylonid.nativealpha.webview.SessionRestoreData
 import com.cylonid.nativealpha.webview.WebViewClientWithDownload
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -227,7 +228,7 @@ fun WebViewScreen(
     }
 
     LaunchedEffect(webApp?.url) {
-        val url = webApp?.url
+        val url = webApp?.lastUrl ?: webApp?.url
         if (!initialUrlLoaded && !url.isNullOrBlank() && (webApp?.isLocked == false || pinUnlocked)) {
             webViewRef.value?.loadUrl(url)
             initialUrlLoaded = true
@@ -236,7 +237,7 @@ fun WebViewScreen(
 
     LaunchedEffect(pinUnlocked) {
         if (pinUnlocked) {
-            val url = webApp?.url
+            val url = webApp?.lastUrl ?: webApp?.url
             if (!url.isNullOrBlank()) {
                 webViewRef.value?.loadUrl(url)
                 initialUrlLoaded = true
@@ -254,6 +255,15 @@ fun WebViewScreen(
                 window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } else {
                 window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            // Load last session if available
+            val sessionManager = SessionManager(context, app.id, app.name)
+            val lastSession = sessionManager.loadLastSessionSnapshot()
+            if (lastSession != null) {
+                val restoreData = sessionManager.applySessionSnapshot(lastSession)
+                _webViewState.value = _webViewState.value.copy(
+                    shouldImportSession = restoreData
+                )
             }
         }
     }
@@ -447,6 +457,18 @@ fun WebViewScreen(
                     onClick = {
                         val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
                         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Link", linkUrl))
+                        // Also save to app clipboard
+                        webApp?.let { app ->
+                            val item = com.cylonid.nativealpha.waos.model.ClipboardItem(
+                                text = linkUrl,
+                                appId = app.id.toInt(),
+                                timestamp = System.currentTimeMillis(),
+                                type = "link"
+                            )
+                            com.cylonid.nativealpha.waos.model.ClipboardRepository.saveClipboardItem(
+                                context, item, app.clipboardMaxItems
+                            )
+                        }
                         android.widget.Toast.makeText(context, "Link copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
                         viewModel.dismissLinkLongPressDialog()
                     },
@@ -507,6 +529,18 @@ fun WebViewScreen(
                         onClick = {
                             val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
                             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Text", selectedText))
+                            // Also save to app clipboard
+                            webApp?.let { app ->
+                                val item = com.cylonid.nativealpha.waos.model.ClipboardItem(
+                                    text = selectedText,
+                                    appId = app.id.toInt(),
+                                    timestamp = System.currentTimeMillis(),
+                                    type = "text"
+                                )
+                                com.cylonid.nativealpha.waos.model.ClipboardRepository.saveClipboardItem(
+                                    context, item, app.clipboardMaxItems
+                                )
+                            }
                             android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
                             viewModel.clearSelectedText()
                         },

@@ -3,7 +3,11 @@ package com.cylonid.nativealpha.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -272,8 +276,28 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionCard(title = "Backup & Restore", icon = Icons.Rounded.Backup) {
+                    val exportFolderLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.OpenDocumentTree(),
+                        onResult = { uri: Uri? ->
+                            uri?.let {
+                                context.contentResolver.takePersistableUriPermission(
+                                    it,
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                )
+                                viewModel.exportDataToFolder(it)
+                            }
+                        }
+                    )
+
+                    val importFileLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.OpenDocument(),
+                        onResult = { uri: Uri? ->
+                            uri?.let { viewModel.importDataFromUri(it) }
+                        }
+                    )
+
                     Button(
-                        onClick = { viewModel.exportData() },
+                        onClick = { exportFolderLauncher.launch(null) },
                         enabled = !viewModel.isExporting,
                         modifier = Modifier.fillMaxWidth().height(44.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -293,12 +317,12 @@ fun SettingsScreen(
                         } else {
                             Icon(Icons.Rounded.CloudUpload, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Export All Data", fontWeight = FontWeight.SemiBold)
+                            Text("Export to Folder", fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { viewModel.importData() },
+                        onClick = { importFileLauncher.launch(arrayOf("application/octet-stream", "*/*")) },
                         modifier = Modifier.fillMaxWidth().height(44.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
                         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
@@ -306,7 +330,15 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Rounded.Download, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Import Data", fontWeight = FontWeight.SemiBold)
+                        Text("Import from .waos", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (viewModel.lastExportMessage.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            viewModel.lastExportMessage,
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
                     }
                 }
 

@@ -1,6 +1,7 @@
 package com.cylonid.nativealpha.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -139,8 +140,42 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun importData() {
-        lastExportMessage = "To import, place your backup file in the app's backup folder and select it."
+    fun exportDataToFolder(folderUri: Uri) {
+        isExporting = true
+        lastExportMessage = ""
+        viewModelScope.launch {
+            try {
+                val uriString = backupService.createBackupToUri(folderUri)
+                lastExportMessage = if (!uriString.isNullOrBlank()) {
+                    "Backup saved to selected folder"
+                } else {
+                    "Failed to save backup to selected folder"
+                }
+            } catch (e: Exception) {
+                lastExportMessage = "Export error: ${e.message}"
+            } finally {
+                isExporting = false
+            }
+        }
+    }
+
+    fun importDataFromUri(fileUri: Uri) {
+        isImporting = true
+        lastExportMessage = ""
+        viewModelScope.launch {
+            try {
+                val success = backupService.restoreBackupFromUri(fileUri)
+                lastExportMessage = if (success) {
+                    "Backup imported successfully"
+                } else {
+                    "Failed to import backup file"
+                }
+            } catch (e: Exception) {
+                lastExportMessage = "Import error: ${e.message}"
+            } finally {
+                isImporting = false
+            }
+        }
     }
 
     fun clearExportMessage() {

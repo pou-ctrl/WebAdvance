@@ -1,6 +1,8 @@
 package com.cylonid.nativealpha.service
 
 import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.cylonid.nativealpha.data.AppDatabase
 import com.cylonid.nativealpha.manager.CredentialManager
 import com.cylonid.nativealpha.model.WebApp
@@ -36,6 +38,7 @@ class BackupService @Inject constructor(
 
     suspend fun createBackup(): String? = withContext(Dispatchers.IO) {
         try {
+            if (!backupDir.exists()) backupDir.mkdirs()
             val timestamp = System.currentTimeMillis()
             val backupFile = File(backupDir, "waos_backup_$timestamp.waos")
 
@@ -61,14 +64,60 @@ class BackupService @Inject constructor(
         }
     }
 
+    suspend fun createBackupToUri(folderUri: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext null
+            if (!folder.canWrite()) return@withContext null
+            val timestamp = System.currentTimeMillis()
+            val filename = "waos_backup_$timestamp.waos"
+            val fileDoc = folder.createFile("application/octet-stream", filename) ?: return@withContext null
+            val uri = fileDoc.uri
+
+            val webApps = webAppRepository.getAllWebApps().first()
+            val settings = mapOf(
+                "version" to 2,
+                "timestamp" to timestamp,
+                "format" to "waos",
+                "appName" to "WAOS - Web App Operating System"
+            )
+            val backupData = mapOf(
+                "settings" to settings,
+                "webApps" to webApps
+            )
+            val json = gson.toJson(backupData)
+
+            context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+            uri.toString()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun restoreBackup(backupPath: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val backupFile = File(backupPath)
             if (!backupFile.exists()) return@withContext false
             val json = FileInputStream(backupFile).use { it.readBytes().toString(Charsets.UTF_8) }
+            restoreBackupFromJson(json)
+        } catch (e: Exception) {
+            false
+        }
+    }
 
+    suspend fun restoreBackupFromUri(fileUri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val inputStream = context.contentResolver.openInputStream(fileUri) ?: return@withContext false
+            val json = inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            restoreBackupFromJson(json)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun restoreBackupFromJson(json: String): Boolean {
+        return try {
             val root = gson.fromJson(json, com.google.gson.JsonObject::class.java)
-            val webAppsJson = root.getAsJsonArray("webApps") ?: return@withContext false
+            val webAppsJson = root.getAsJsonArray("webApps") ?: return false
 
             val webAppsType = object : TypeToken<List<WebApp>>() {}.type
             val webApps: List<WebApp> = try {
@@ -79,7 +128,6 @@ class BackupService @Inject constructor(
 
             webApps.forEach { app ->
                 try {
-                    // Reset id=0 so Room auto-generates a new primary key on insert
                     webAppRepository.insertWebApp(app.copy(id = 0, thumbnail = null))
                 } catch (e: Exception) {
                     // Skip apps that fail to insert individually
